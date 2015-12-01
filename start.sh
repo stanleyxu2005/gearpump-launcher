@@ -18,6 +18,12 @@ COMMAND=$1
 shift
 
 case "$COMMAND" in
+  local)
+    # Will launch REST service as daemon and then launch a local cluster (in one jvm) in foreground
+    JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname) -Dgearpump.services.host=$(hostname)"
+    nohup sh "$SUT_HOME"/bin/services &
+    nohup sh "$SUT_HOME"/bin/local "$@"
+    ;;
   master)
     # Will launch REST service as daemon and then launch master in foreground
     JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname) -Dgearpump.services.host=$(hostname)"
