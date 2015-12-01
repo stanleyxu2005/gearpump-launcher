@@ -8,7 +8,7 @@ if [ ! -d "$SUT_HOME/bin" ]; then
   exit 1
 fi
 
-if [ -z "JAVA_OPTS" ]; then
+if [ -z "$JAVA_OPTS" ]; then
   echo "FATAL: Environment variable 'JAVA_OPTS' is NOT set."
   exit 1
 fi
