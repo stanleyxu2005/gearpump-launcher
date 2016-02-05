@@ -14,34 +14,43 @@ if [ -z "$JAVA_OPTS" ]; then
 fi
 export JAVA_OPTS
 
+function set_user_data_opts {
+  LOG_DIR=/var/log/gearpump
+  JARSTORE_DIR=/tmp/gearpump
+  JAVA_OPTS="$JAVA_OPTS -Dgearpump.log.daemon.dir=$LOG_DIR"
+  JAVA_OPTS="$JAVA_OPTS -Dgearpump.log.application.dir=$LOG_DIR"
+  JAVA_OPTS="$JAVA_OPTS -Dgearpump.jarstore.rootpath=$JARSTORE_DIR"
+}
+
 COMMAND=$1
 shift
 
 case "$COMMAND" in
-  local)
-    # Will launch REST service as daemon and then launch a local cluster (in one jvm) in foreground
-    JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname) -Dgearpump.services.host=$(hostname)"
+  master|local)
+    # Launch a container with Gearpump cluster and REST interface (in foreground)
+    HOSTNAME=$(hostname)
+    JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$HOSTNAME"
+    JAVA_OPTS="$JAVA_OPTS -Dgearpump.services.host=$HOSTNAME"
+    set_user_data_opts
     nohup sh "$SUT_HOME"/bin/services &
-    nohup sh "$SUT_HOME"/bin/local "$@"
-    ;;
-  master)
-    # Will launch REST service as daemon and then launch master in foreground
-    JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname) -Dgearpump.services.host=$(hostname)"
-    nohup sh "$SUT_HOME"/bin/services &
-    nohup sh "$SUT_HOME"/bin/master "$@"
+    nohup sh "$SUT_HOME"/bin/"$COMMAND" "$@"
     ;;
   worker)
-    # Will launch a worker instance in foreground
+    # Launch a container with a Gearpump worker (in foreground)
     JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname -i)"
+    set_user_data_opts
     nohup sh "$SUT_HOME"/bin/worker
     ;;
   gear|storm)
-    # Will execute command `gear` or `storm` with any number of arguments and wait for response
-    JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname)"
+    # Launch a container and execute command `gear` or `storm`
+    # Container will be killed, when command is executed. 
+    JAVA_OPTS="$JAVA_OPTS -Dgearpump.hostname=$(hostname -i)"
+    set_user_data_opts
     sh "$SUT_HOME"/bin/"$COMMAND" "$@"
     ;;
   storm-drpc)
-    # Will launch a Storm DRPC daemon
+    # Launch a container with a Storm DRPC daemon
+    # Note that this command has nothing to do with Gearpump, it only uses storm related jar libs.
     LIB_HOME="$SUT_HOME"/lib
     cat > "$SUT_HOME"/storm.yaml <<- YAML
 drpc.servers:
