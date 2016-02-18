@@ -4,7 +4,7 @@
 # See accompanying LICENSE file.
 
 if [ ! -d "$SUT_HOME/bin" ]; then
-  echo "FATAL: Directory '$SUT_HOME' is incomplete. Please re-install."
+  echo "FATAL: The Gearpump distribution seems to be incomplete. Please build gearpump with 'sbt clean assembly' first, so that the test driver is able to mount the distribution directory to '/opt/gearpump'."
   exit 1
 fi
 
@@ -13,13 +13,16 @@ if [ -z "$JAVA_OPTS" ]; then
   exit 1
 fi
 
+update_config_file() {
+  CONF_FILE="$SUT_HOME"/conf/gear.conf
+  mkdir /var/log/gearpump
+  sed -i 's/log\.daemon\.dir\s*=.*$/log.daemon.dir = "\/var\/log\/gearpump\/daemon"/g' $CONF_FILE
+  sed -i 's/log\.application\.dir\s*=.*$/log.application.dir = "\/var\/log\/gearpump\/app"/g' $CONF_FILE
+  sed -i 's/#\s*jarstore\.rootpath\s*=.*$/jarstore.rootpath = "\/tmp"/g' $CONF_FILE
+}
+
 set_and_export_java_opts() {
-  LOG_DIR=/var/log/gearpump
-  JARSTORE_DIR=/tmp/gearpump
-  JAVA_OPTS="$JAVA_OPTS $@\
-    -Dgearpump.log.daemon.dir=$LOG_DIR \
-    -Dgearpump.log.application.dir=$LOG_DIR \
-    -Dgearpump.jarstore.rootpath=$JARSTORE_DIR"
+  JAVA_OPTS="$JAVA_OPTS $*"
   export JAVA_OPTS
 }
 
@@ -30,6 +33,7 @@ case "$COMMAND" in
   master|local)
     # Launch a container with Gearpump cluster and REST interface (in foreground)
     HOSTNAME=$(hostname)
+    update_config_file
     set_and_export_java_opts \
       "-Dgearpump.hostname=$HOSTNAME" \
       "-Dgearpump.services.host=$HOSTNAME"
@@ -38,6 +42,7 @@ case "$COMMAND" in
     ;;
   worker)
     # Launch a container with a Gearpump worker (in foreground)
+    update_config_file
     set_and_export_java_opts \
       "-Dgearpump.hostname=$(hostname -i)"
     nohup sh "$SUT_HOME"/bin/worker
@@ -45,6 +50,7 @@ case "$COMMAND" in
   gear|storm)
     # Launch a container and execute command `gear` or `storm`
     # Container will be killed, when command is executed. 
+    update_config_file
     set_and_export_java_opts \
       "-Dgearpump.hostname=$(hostname -i)"
     sh "$SUT_HOME"/bin/"$COMMAND" "$@"
@@ -53,10 +59,10 @@ case "$COMMAND" in
     # Launch a container with a Storm DRPC daemon
     # Note that this command has nothing to do with Gearpump, it only uses storm related jar libs.
     LIB_HOME="$SUT_HOME"/lib
-    cat > "$SUT_HOME"/storm.yaml <<- YAML
+    cat > "$SUT_HOME"/storm.yaml <<- EOF
 drpc.servers:
-  - `ip route | awk '/default/ {print $3}'`
-YAML
+  - $(ip route|awk '/default/ {print $3}')
+EOF
     java -server -Xmx768m -cp "$LIB_HOME"/*:"$LIB_HOME"/storm/* backtype.storm.daemon.drpc
     ;;
   *)
